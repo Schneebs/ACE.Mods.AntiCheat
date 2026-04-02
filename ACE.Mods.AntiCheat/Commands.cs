@@ -5,7 +5,7 @@ internal static class Commands
 {
     internal static void Register()
     {
-        const string usage = "status | blink <on|off> | verbose <on|off> | adminimmune <on|off> | cloakimmune <on|off> | reload";
+        const string usage = "status | blink <on|off> | verbose <on|off> | adminimmune <on|off> | cloakimmune <on|off> | jailonblink <on|off> | reload";
         const string desc  = "Configure the AntiCheat mod on the fly. Changes are in-memory only; edit Settings.json for persistence.";
         CommandManager.TryAddCommand(Handle, "anticheat", AccessLevel.Developer, CommandHandlerFlag.None, desc, usage);
         CommandManager.TryAddCommand(Handle, "ac",         AccessLevel.Developer, CommandHandlerFlag.None, desc, $"(alias for /anticheat) {usage}");
@@ -82,6 +82,12 @@ internal static class Commands
                     s.CloakedPlayersAreImmune);
                 break;
 
+            case "jailonblink":
+                Toggle(session, parameters, "jailonblink", "AntiBlinkJailOnDetection",
+                    v => s.AntiBlinkJailOnDetection = v,
+                    s.AntiBlinkJailOnDetection);
+                break;
+
             case "reload":
                 PatchClass.ReloadSettings();
                 Say(session, "[AntiCheat] Settings reloaded from Settings.json.");
@@ -104,6 +110,7 @@ internal static class Commands
         Say(session, $"  verbose       : {Flag(s.AntiBlinkVerboseLogging)}");
         Say(session, $"  adminimmune   : {Flag(s.AdminsAreImmune)}");
         Say(session, $"  cloakimmune   : {Flag(s.CloakedPlayersAreImmune)}");
+        Say(session, $"  jailonblink   : {Flag(s.AntiBlinkJailOnDetection)}");
         Say(session, "  (changes reset on server restart — edit Settings.json to persist)");
     }
 

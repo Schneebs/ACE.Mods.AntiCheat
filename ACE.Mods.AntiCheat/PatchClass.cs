@@ -1,5 +1,4 @@
 
-using ACE.Mods.AntiCheat.Lib;
 using ACE.Server.Network.Sequence;
 
 namespace ACE.Mods.AntiCheat;
@@ -8,7 +7,6 @@ namespace ACE.Mods.AntiCheat;
 public class PatchClass(BasicMod mod, string settingsName = "Settings.json") : BasicPatch<Settings>(mod, settingsName)
 {
     internal static AntiBlink? AntiBlink { get; private set; }
-    internal static MultiClientDetector? MultiClientDetector { get; private set; }
 
     // Kept so Commands.cs (static context) can reach the protected SettingsChanged handler.
     private static PatchClass? _instance;
@@ -24,7 +22,6 @@ public class PatchClass(BasicMod mod, string settingsName = "Settings.json") : B
     {
         Settings = SettingsContainer?.Settings ?? new();
         StartServices();
-        StartCleanupTask();
         Commands.Register();
 
         Mod.Log($"[AntiBlink] OnWorldOpen: EnableAntiBlink={Settings.EnableAntiBlink}, VerboseLogging={Settings.AntiBlinkVerboseLogging}, AntiBlink={(AntiBlink != null ? "initialized" : "null")}", ModManager.LogLevel.Warn);
@@ -52,39 +49,9 @@ public class PatchClass(BasicMod mod, string settingsName = "Settings.json") : B
     private void StartServices()
     {
         if (Settings.EnableAntiBlink)
-        {
             AntiBlink ??= new AntiBlink();
-        }
-        else {
+        else
             AntiBlink = null;
-        }
-
-        if (Settings.EnableMultiClientDetection)
-        {
-            MultiClientDetector ??= new MultiClientDetector();
-        }
-        else {
-            MultiClientDetector = null;
-        }
-    }
-
-    private void StartCleanupTask()
-    {
-        Task.Run(async () =>
-        {
-            while (true)
-            {
-                try
-                {
-                    await Task.Delay(TimeSpan.FromMinutes(5)); // Run every 5 minutes
-                    MultiClientDetector?.Cleanup();
-                }
-                catch (Exception ex)
-                {
-                    Mod.Log($"Error in cleanup task: {ex.Message}", ModManager.LogLevel.Error);
-                }
-            }
-        });
     }
 
     protected override void SettingsChanged(object? sender, EventArgs e)
@@ -107,20 +74,8 @@ public class PatchClass(BasicMod mod, string settingsName = "Settings.json") : B
         catch (Exception ex) {
             Mod.Log($"[AntiBlink] Exception in hook: {ex}", ModManager.LogLevel.Error);
         }
-        
-        return true;
-    }
 
-    [HarmonyPostfix]
-    [HarmonyPatch(typeof(Player), nameof(Player.LogOut_Inner))]
-    public static void PostLogOut_Inner(bool clientSessionTerminatedAbruptly, Player __instance)
-    {
-        try {
-            MultiClientDetector?.OnPlayerDisconnect(__instance, clientSessionTerminatedAbruptly);
-        }
-        catch (Exception ex) {
-            Mod.Log($"Failed to call multi-client detector: {ex.Message}", ModManager.LogLevel.Error);
-        }
+        return true;
     }
 
 }

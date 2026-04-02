@@ -84,6 +84,9 @@ namespace ACE.Mods.AntiCheat
                     {
                         __instance.SetProperty(PropertyFloat.AbuseLoggingTimestamp, (_serverStart - now).TotalMilliseconds);
                         Mod.Log($"[AntiBlink] BLOCKED {__instance.Name} through 0x{wo.Guid.Full:X8} '{wo.Name}' at {obj.Position}", ModManager.LogLevel.Warn);
+
+                        if (Settings.AntiBlinkJailOnDetection)
+                            TrySendToJail(__instance);
                     }
                     __instance.Sequences.GetNextSequence(SequenceType.ObjectForcePosition);
                     __instance.SendUpdatePosition();
@@ -96,6 +99,28 @@ namespace ACE.Mods.AntiCheat
                 Mod.Log($"[AntiBlink] {__instance.Name}: {doorsChecked} door(s) checked, no blink detected", ModManager.LogLevel.Info);
 
             return true;
+        }
+
+        // Cached once per AntiBlink lifetime; null means the server doesn't have the jail feature yet.
+        private static readonly MethodInfo? _sendToJailMethod =
+            typeof(Player).GetMethod("SendToJail", BindingFlags.Public | BindingFlags.Instance);
+
+        private static void TrySendToJail(Player player)
+        {
+            if (_sendToJailMethod == null)
+            {
+                Mod.Log("[AntiBlink] SendToJail not available — rebuild the server with Player_Jail.cs to enable jailing.", ModManager.LogLevel.Warn);
+                return;
+            }
+            try
+            {
+                Mod.Log($"[AntiBlink] Sending {player.Name} to jail.", ModManager.LogLevel.Warn);
+                _sendToJailMethod.Invoke(player, null);
+            }
+            catch (Exception ex)
+            {
+                Mod.Log($"[AntiBlink] SendToJail threw: {ex.InnerException?.Message ?? ex.Message}", ModManager.LogLevel.Error);
+            }
         }
 
         private bool IsMonsterDoor(PhysicsObj obj)
