@@ -1,13 +1,14 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net8.0</TargetFramework>
+		<TargetFramework>net10.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<OutputPath>C:\ACE\Mods\$(AssemblyName)</OutputPath>
 		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 		<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
 		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+		<GenerateDependencyFile>false</GenerateDependencyFile>
 		<Version>1.7.0</Version>
 	</PropertyGroup>
 
@@ -17,24 +18,27 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!-- Use version-patched refs (1.0.0.0) to match how ACE.Server.dll references these assemblies.
+		     The server ships them as 1.70.4680.0 on disk, but ACE.Server.dll and other mods reference them as 1.0.0.0.
+		     Compiling against 1.70.4680.0 causes McMaster.NETCore.Plugins to fail resolving ACE.Entity at runtime. -->
 		<Reference Include="ACE.Adapter">
-			<HintPath>C:\ACE\Server\ACE.Adapter.dll</HintPath>
+			<HintPath>..\refs\ACE.Adapter.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 		<Reference Include="ACE.Common">
-			<HintPath>C:\ACE\Server\ACE.Common.dll</HintPath>
+			<HintPath>..\refs\ACE.Common.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 		<Reference Include="ACE.Database">
-			<HintPath>C:\ACE\Server\ACE.Database.dll</HintPath>
+			<HintPath>..\refs\ACE.Database.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 		<Reference Include="ACE.DatLoader">
-			<HintPath>C:\ACE\Server\ACE.DatLoader.dll</HintPath>
+			<HintPath>..\refs\ACE.DatLoader.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 		<Reference Include="ACE.Entity">
-			<HintPath>C:\ACE\Server\ACE.Entity.dll</HintPath>
+			<HintPath>..\refs\ACE.Entity.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 		<Reference Include="ACE.Server">
@@ -47,6 +51,15 @@
 		<None Update="Meta.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
+		<None Update="Settings.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Remove="Tests\**" />
+		<EmbeddedResource Remove="Tests\**" />
+		<None Remove="Tests\**" />
 	</ItemGroup>
 
 </Project>

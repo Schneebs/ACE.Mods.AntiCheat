@@ -1,4 +1,4 @@
-﻿
+
 using ACE.Mods.AntiCheat.Lib;
 using ACE.Server.Network;
 using ACE.Server.Network.Sequence;
@@ -16,65 +16,84 @@ namespace ACE.Mods.AntiCheat
         }
 
 
-        internal bool PreUpdatePlayerPosition(Position newPosition, bool forceUpdate, ref Player __instance, ref bool __result)
+        internal bool PreSetRequestedLocation(Position newPosition, Player __instance)
         {
+            bool verbose = Settings.AntiBlinkVerboseLogging;
+
             // bail early if the player is teleporting, or an admin, or cloaked
-            if (__instance.Teleporting || (Settings.AdminsAreImmune && __instance.IsAdmin) || (Settings.CloakedPlayersAreImmune && __instance.Cloaked == true)) {
+            if (__instance.Teleporting) {
+                if (verbose) Mod.Log($"[AntiBlink] {__instance.Name}: skipped - teleporting", ModManager.LogLevel.Info);
+                return true;
+            }
+            if (Settings.AdminsAreImmune && __instance.IsAdmin) {
+                if (verbose) Mod.Log($"[AntiBlink] {__instance.Name}: skipped - admin immune", ModManager.LogLevel.Info);
+                return true;
+            }
+            if (Settings.CloakedPlayersAreImmune && __instance.Cloaked == true) {
+                if (verbose) Mod.Log($"[AntiBlink] {__instance.Name}: skipped - cloaked immune", ModManager.LogLevel.Info);
                 return true;
             }
 
             var now = DateTime.UtcNow;
-            var currentPosition = __instance.GetPosition(PositionType.Location);
+            var currentPosition = __instance.Location;
 
-            // This could also use some filtering to only get nearby doors instead of all visible,
-            // but this is pretty fast in benchmarks so i'm not too worried currently
-            foreach (var obj in __instance.PhysicsObj.ObjMaint.GetVisibleObjectsValues())
+            var visibleObjects = __instance.PhysicsObj.ObjMaint.GetVisibleObjects(__instance.PhysicsObj.CurCell);
+
+            // Verbose header: only log when there are candidates to examine (not every footstep).
+            int doorsChecked = 0;
+
+            foreach (var obj in visibleObjects)
             {
-                // TODO: cross-landblock collision check
-                if (obj.Position.Landblock != currentPosition.Landblock) {
+                if (obj.Position.Landblock != currentPosition.Landblock)
                     continue;
-                }
 
-                // TODO: probably could check this zlevel in a better way...
-                if (Math.Abs(obj.Position.Frame.Origin.Z - currentPosition.PositionZ) > Settings.AntiBlinkZHeightLimit)
-                {
+                float zDiff = Math.Abs(obj.Position.Frame.Origin.Z - currentPosition.PositionZ);
+                if (zDiff > Settings.AntiBlinkZHeightLimit)
                     continue;
-                }
+
+                var wo = obj.WeenieObj?.WorldObject;
+                if (wo == null)
+                    continue;
 
                 Vector3? collisionPoint = null;
-                var wo = obj.WeenieObj?.WorldObject;
 
-                if (wo == null) {
+                bool isNonEtherealDoor = IsNonEtherealDoor(obj);
+                bool isMonsterDoor = !isNonEtherealDoor && Settings.AntiBlinkMonsterDoors && IsMonsterDoor(obj);
+
+                if (!isNonEtherealDoor && !isMonsterDoor)
                     continue;
-                }
 
-                // non-ethereal doors
-                if (IsNonEtherealDoor(obj))
-                {
-                    collisionPoint = CollisionHelpers.GetDoorCollisionPoint(currentPosition, newPosition, wo);
-                }
-                // monster doors (Mana Barrier)
-                else if (Settings.AntiBlinkMonsterDoors && IsMonsterDoor(obj))
-                {
-                    collisionPoint = CollisionHelpers.GetDoorCollisionPoint(currentPosition, newPosition, wo);
-                }
+                // Log the header once, just before the first door candidate this move.
+                if (verbose && doorsChecked == 0)
+                    Mod.Log($"[AntiBlink] {__instance.Name}: move {currentPosition} → {newPosition} ({visibleObjects.Count} vis, cell={__instance.PhysicsObj.CurCell?.ID:X8})", ModManager.LogLevel.Info);
 
-                // if there was a collision, cancel current move and send a force position
+                doorsChecked++;
+
+                if (isNonEtherealDoor)
+                    collisionPoint = CollisionHelpers.GetDoorCollisionPoint(currentPosition, newPosition, wo);
+                else if (isMonsterDoor)
+                    collisionPoint = CollisionHelpers.GetDoorCollisionPoint(currentPosition, newPosition, wo);
+
+                if (verbose)
+                    Mod.Log($"[AntiBlink]   0x{wo.Guid.Full:X8} '{wo.Name}' ({(isNonEtherealDoor ? "door" : "monsterdoor")}, state={obj.State}): {(collisionPoint.HasValue ? $"COLLISION at {collisionPoint.Value}" : "no intersection")}", ModManager.LogLevel.Info);
+
                 if (collisionPoint.HasValue)
                 {
                     var lastBlink = __instance.GetProperty(PropertyFloat.AbuseLoggingTimestamp) ?? 0;
                     if (Math.Abs(lastBlink - (_serverStart - now).TotalMilliseconds) > Settings.AntiBlinkLogIntervalMilliseconds)
                     {
                         __instance.SetProperty(PropertyFloat.AbuseLoggingTimestamp, (_serverStart - now).TotalMilliseconds);
-                        Mod.Log($"Player {__instance.Name} attempted to blink through (0x{wo.Guid.Full:X8} {wo.Name}) at {obj.Position}", ModManager.LogLevel.Info);
+                        Mod.Log($"[AntiBlink] BLOCKED {__instance.Name} through 0x{wo.Guid.Full:X8} '{wo.Name}' at {obj.Position}", ModManager.LogLevel.Warn);
                     }
                     __instance.Sequences.GetNextSequence(SequenceType.ObjectForcePosition);
                     __instance.SendUpdatePosition();
-                    __result = false;
 
                     return false;
                 }
             }
+
+            if (verbose && doorsChecked > 0)
+                Mod.Log($"[AntiBlink] {__instance.Name}: {doorsChecked} door(s) checked, no blink detected", ModManager.LogLevel.Info);
 
             return true;
         }
